@@ -4,9 +4,36 @@ using System.Net.Sockets;
 using System.IO;
 using System.Runtime.Serialization.Json;
 using log4net;
+using System.Collections.Generic;
 
 namespace SR.Packets
 {
+	[DataContract]
+	public class ConnectionInfo
+	{
+		[DataMember]
+		public String id;
+
+		[DataMember]
+		public bool conn;
+
+		[DataMember]
+		public String ip;
+	}
+
+	[DataContract]
+	public class TokenClient
+	{
+		[DataMember]
+		public String id;
+
+		[DataMember]
+		public int r;
+
+		[DataMember]
+		public int g;
+	}
+
 	[DataContract]
 	public class NetworkPacket
 	{
@@ -38,10 +65,10 @@ namespace SR.Packets
 		public int type;
 
 		[DataMember(EmitDefaultValue = false)]
-		public String id = null;
+		public String id;
 
 		[DataMember(EmitDefaultValue = false)]
-		public String ip = null;
+		public String ip;
 
 		[DataMember(EmitDefaultValue = false)]
 		public int? r;
@@ -53,10 +80,10 @@ namespace SR.Packets
 		public int? idx;
 
 		[DataMember(EmitDefaultValue = false)]
-		public String table = null; // FIXME
+		public List<TokenClient> table;
 
 		[DataMember(EmitDefaultValue = false)]
-		public String connections = null; // FIXME
+		public List<ConnectionInfo> connections;
 
 		[DataMember(EmitDefaultValue = false)]
 		public int? elmode;
