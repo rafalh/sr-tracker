@@ -7,6 +7,7 @@ using System.IO;
 using log4net;
 using System.Collections.Generic;
 using System.Threading;
+using System.Diagnostics;
 
 namespace SR.Tracker
 {
@@ -111,15 +112,17 @@ namespace SR.Tracker
 
 		private void HandleJoinPacket (NetworkPacket packet, TcpClient client)
 		{
+			Debug.Assert (packet.id != null && packet.port != null);
 			log.Info ("Join Packet - ID " + packet.id);
 
 			String ip = client.Client.RemoteEndPoint.ToString ();
-			ClientNode node = new ClientNode (packet.id, ip);
+			ClientNode node = new ClientNode (packet.id, ip, (int) packet.port);
 			nodeMgr.addNode (node);
 
 			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.JOIN_RESP);
 			resp.id = packet.id;
 			resp.ip = node.Parent?.Ip;
+			resp.port = node.Parent?.Port;
 			resp.Write(client.GetStream());
 		}
 

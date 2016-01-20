@@ -5,6 +5,7 @@ using System.IO;
 using System.Runtime.Serialization.Json;
 using log4net;
 using System.Collections.Generic;
+using System.Net;
 
 namespace SR.Packets
 {
@@ -68,6 +69,9 @@ namespace SR.Packets
 		public String id;
 
 		[DataMember(EmitDefaultValue = false)]
+		public int? port;
+
+		[DataMember(EmitDefaultValue = false)]
 		public String ip;
 
 		[DataMember(EmitDefaultValue = false)]
@@ -98,8 +102,9 @@ namespace SR.Packets
 			ser.WriteObject(memStream, this);
 
 			BinaryWriter writer = new BinaryWriter (stream);
-			int size = (int) memStream.Position;
-			writer.Write (size); // number of bytes
+			int size = (int) memStream.Position; // number of bytes
+			size = IPAddress.HostToNetworkOrder(size); // convert to Big Endian
+			writer.Write (size);
 			memStream.Position = 0;
 			memStream.CopyTo(stream);
 
@@ -112,6 +117,7 @@ namespace SR.Packets
 		{
 			BinaryReader binaryReader = new BinaryReader (stream);
 			int size = binaryReader.ReadInt32 ();
+			size = IPAddress.NetworkToHostOrder(size); // convert from Big Endian
 			byte[] data = binaryReader.ReadBytes (size);
 
 			DataContractJsonSerializer ser = new DataContractJsonSerializer(typeof(NetworkPacket));
