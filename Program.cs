@@ -11,9 +11,19 @@ namespace SR.Tracker
 	{
 		static readonly ILog log = LogManager.GetLogger(typeof(Tracker));
 
+		private static void configureLog4net()
+		{
+			//BasicConfigurator.Configure();
+			string appDir = AppDomain.CurrentDomain.BaseDirectory;
+			string confPath = Path.Combine (appDir, "..", "..", "log4net.xml");
+			confPath = Path.GetFullPath (confPath);
+			Console.WriteLine ("Loading log4net configuration from " + confPath);
+			XmlConfigurator.Configure(new System.IO.FileInfo(confPath));
+		}
+
 		public static void Main (string[] args)
 		{
-			BasicConfigurator.Configure();
+			configureLog4net ();
 
 			Console.WriteLine ("Projekt z przedmiotu SR");
 			Console.WriteLine ("Implementacja algorytmu Ricarta-Agrawali w C#");

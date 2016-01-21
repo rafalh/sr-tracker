@@ -19,6 +19,7 @@ namespace SR.Tracker
 
 		private TcpListener server;
 		private NodeManager nodeMgr = new NodeManager();
+		private bool election = false;
 
 		public Tracker ()
 		{
@@ -30,23 +31,30 @@ namespace SR.Tracker
 
 		private void ThreadProc(Object argument)
 		{
-			TcpClient client = (TcpClient) argument;
+			TcpClient tcpClient = (TcpClient) argument;
 			// Get a stream object for reading and writing
-			NetworkStream stream = client.GetStream ();
+			NetworkStream stream = tcpClient.GetStream ();
+			ClientNode node = nodeMgr.getNodeByEndpoint (tcpClient.Client.RemoteEndPoint);
 
 			while (true) {
 				NetworkPacket packet;
 				try {
 					packet = NetworkPacket.Read (stream);
 				} catch (Exception) {
-					log.Info ("Disconnected.");
+					OnNodeDisconnected (node);
 					break;
 				}
-				HandlePacket (packet, client);
+				HandlePacket (packet, tcpClient);
 			}
 
 			// Shutdown and end connection
-			client.Close ();
+			tcpClient.Close ();
+		}
+
+		private void OnNodeDisconnected(ClientNode node)
+		{
+			log.Info ("Node " + node.Id + " disconnected.");
+			nodeMgr.RemoveNode (node);
 		}
 
 		public void MainLoop ()
@@ -99,30 +107,40 @@ namespace SR.Tracker
 			}
 		}
 
-		private void HandlePingPacket (NetworkPacket packet, TcpClient client)
+		private void HandlePingPacket (NetworkPacket packet, TcpClient tcpClient)
 		{
-			String ip = client.Client.RemoteEndPoint.ToString ();
-			ClientNode node = nodeMgr.getNodeByIp (ip);
+			log.Info ("Ping Packet - " + tcpClient.Client.RemoteEndPoint);
+
+			ClientNode node = nodeMgr.getNodeByEndpoint (tcpClient.Client.RemoteEndPoint);
 			if (node == null) {
-				log.Error ("Unknown node " + ip);
+				log.Error ("Unknown node " + tcpClient.Client.RemoteEndPoint);
 				return;
 			}
+
 			node.UpdateLastPing ();
 		}
 
 		private void HandleJoinPacket (NetworkPacket packet, TcpClient client)
 		{
 			Debug.Assert (packet.id != null && packet.port != null);
-			log.Info ("Join Packet - ID " + packet.id);
+			IPEndPoint endPoint = (IPEndPoint)client.Client.RemoteEndPoint;
+			log.Info ("Join Packet - " + endPoint + " - " + packet.id);
 
-			String ip = client.Client.RemoteEndPoint.ToString ();
-			ClientNode node = new ClientNode (packet.id, ip, (int) packet.port);
+			ClientNode node = nodeMgr.getNodeById (packet.id);
+			if (node != null) {
+				log.Warn ("Node tried to join with existing ID");
+				return;
+			}
+
+			node = new ClientNode (packet.id, client.Client.RemoteEndPoint, (int) packet.port);
 			nodeMgr.addNode (node);
 
 			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.JOIN_RESP);
 			resp.id = packet.id;
-			resp.ip = node.Parent?.Ip;
-			resp.port = node.Parent?.Port;
+			if (node.Parent != null) {
+				resp.ip = ((IPEndPoint)node.Parent.EndPoint).Address.ToString ();
+				resp.port = node.Parent.ListenPort;
+			}
 			resp.Write(client.GetStream());
 		}
 
@@ -150,13 +168,15 @@ namespace SR.Tracker
 			// TODO
 
 			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.ELECTION_RESP);
-			resp.allowed = true;
+			resp.allowed = !election;
 			resp.Write(client.GetStream());
+			election = true;
 		}
 
 		private void HandleElectionEndPacket (NetworkPacket packet, TcpClient client)
 		{
 			log.Info ("Election End Packet - ID " + packet.id);
+			election = false;
 			// TODO
 		}
 
