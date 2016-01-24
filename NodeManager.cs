@@ -8,52 +8,88 @@ namespace SR.Tracker
 {
 	public class NodeManager
 	{
-		private static readonly ILog log = LogManager.GetLogger(typeof(NodeManager));
-		private Object mutex = new Object();
+		private static readonly ILog log = LogManager.GetLogger (typeof(NodeManager));
 
-		private List<ClientNode> nodes = new List<ClientNode> ();
+		private Object mutex = new Object ();
+		private List<NetworkNode> nodes = new List<NetworkNode> ();
 
-		public ClientNode getNodeById(String id)
+		public NetworkNode GetNodeById (String id)
 		{
-			foreach (ClientNode node in nodes)
-				if (node.Id == id)
-					return node;
-			return null;
-		}
-
-		public ClientNode getNodeByEndpoint(EndPoint endPoint)
-		{
-			foreach (ClientNode node in nodes)
-				if (node.EndPoint.Equals(endPoint))
-					return node;
-			return null;
-		}
-
-		private ClientNode getParentForNewNode()
-		{
-			if (nodes.Count == 0)
+			lock (mutex) {
+				foreach (NetworkNode node in nodes)
+					if (node.Id == id)
+						return node;
 				return null;
-			return nodes.First ();
+			}
 		}
 
-		public void addNode(ClientNode node)
+		public NetworkNode GetNodeByEndpoint (EndPoint endPoint)
+		{
+			lock (mutex) {
+				foreach (NetworkNode node in nodes)
+					if (node.EndPoint.Equals (endPoint))
+						return node;
+				return null;
+			}
+		}
+
+		public void UpdateNodeParent (NetworkNode node)
+		{
+			lock (mutex) {
+				node.Parent = FindParentForNode (node);
+			}
+		}
+
+		public void AddNode (NetworkNode node)
 		{
 			lock (mutex) {
 				log.Info ("Adding node " + node.Id);
-				node.Parent = getParentForNewNode ();
+				node.Parent = FindParentForNode (null);
 				log.Info ("Parent for new node: " + node.Parent?.Id);
 				nodes.Add (node);
 				log.Info ("Number of nodes " + nodes.Count);
 			}
-
 		}
 
-		public void RemoveNode(ClientNode node)
+		public void RemoveNode (NetworkNode node)
 		{
 			lock (mutex) {
 				log.Info ("Removing node " + node.Id);
 				nodes.Remove (node);
-				// FIXME: children
+				foreach (NetworkNode child in node.Children)
+					child.Parent = null; // children should ask for new parent
+			}
+		}
+
+		public void CheckForTimeOuts ()
+		{
+			log.Debug ("Checking for timeout...");
+			foreach (NetworkNode node in nodes)
+				node.KickIfTimedOut ();
+		}
+
+		private NetworkNode FindParentForNode (NetworkNode node)
+		{
+			var parentCandidates = nodes;
+			if (node != null) {
+				// Ignore recursive children of this node
+				parentCandidates = nodes.Where ((NetworkNode currentNode) => {
+					return currentNode != node && !node.HasChildRecursive (currentNode);
+				}).ToList ();
+			}
+
+			if (parentCandidates.Count == 0)
+				return null; // this is the root node
+
+			// Find nodes with 1-7 children
+			var bestParents = parentCandidates.Where ((NetworkNode currentNode) => {
+				return node.Children.Count > 0 && node.Children.Count < 8;
+			});
+
+			if (bestParents.Count () > 0) {
+				return bestParents.First ();
+			} else {
+				return parentCandidates.First ();
 			}
 		}
 	}

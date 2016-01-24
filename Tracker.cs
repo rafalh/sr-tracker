@@ -15,25 +15,37 @@ namespace SR.Tracker
 	{
 		private const int PORT = 6666;
 
-		static readonly ILog log = LogManager.GetLogger(typeof(Tracker));
+		static readonly ILog log = LogManager.GetLogger (typeof(Tracker));
 
 		private TcpListener server;
-		private NodeManager nodeMgr = new NodeManager();
+		private NodeManager nodeMgr = new NodeManager ();
 		private bool election = false;
+		private Object packetHandlingMutex = new object ();
 
 		public Tracker ()
 		{
 			log.Info ("Starting tracker...");
 			server = new TcpListener (IPAddress.Any, PORT);
 			server.Start ();
+
+			ThreadPool.QueueUserWorkItem (state => {
+				TimeoutCheckerThreadProc ();
+			});
 		}
 
-		private void ThreadProc(Object argument)
+		private void TimeoutCheckerThreadProc()
 		{
-			TcpClient tcpClient = (TcpClient) argument;
+			while (true) {
+				Thread.Sleep (NetworkNode.TimeOutValueMs);
+				// TODO: check
+			}
+		}
+
+		private void ThreadProc (Object argument)
+		{
+			TcpClient tcpClient = (TcpClient)argument;
 			// Get a stream object for reading and writing
 			NetworkStream stream = tcpClient.GetStream ();
-
 
 			while (true) {
 				NetworkPacket packet;
@@ -43,16 +55,18 @@ namespace SR.Tracker
 					OnNodeDisconnected (tcpClient.Client.RemoteEndPoint);
 					break;
 				}
-				HandlePacket (packet, tcpClient);
+				lock (packetHandlingMutex) {
+					HandlePacket (packet, tcpClient);
+				}
 			}
 
 			// Shutdown and end connection
 			tcpClient.Close ();
 		}
 
-		private void OnNodeDisconnected(EndPoint endPoint)
+		private void OnNodeDisconnected (EndPoint endPoint)
 		{
-			ClientNode node = nodeMgr.getNodeByEndpoint (endPoint);
+			NetworkNode node = nodeMgr.GetNodeByEndpoint (endPoint);
 
 			if (node != null) {
 				log.Info ("Node " + node.Id + " disconnected.");
@@ -68,19 +82,18 @@ namespace SR.Tracker
 				log.Info ("Waiting for a connection...");
 
 				// Perform a blocking call to accept requests.
-				// You could also user server.AcceptSocket() here.
 				TcpClient client = server.AcceptTcpClient ();
 				log.Info ("Connected: " + client.Client.RemoteEndPoint);
 
-				ThreadPool.QueueUserWorkItem(state => {
-					ThreadProc(client);
+				ThreadPool.QueueUserWorkItem (state => {
+					ThreadProc (client);
 				});
 			}
 		}
 
 		private void HandlePacket (NetworkPacket packet, TcpClient client)
 		{
-			switch ((NetworkPacket.Type) packet.type) {
+			switch ((NetworkPacket.Type)packet.type) {
 
 			case NetworkPacket.Type.JOIN:
 				HandleJoinPacket (packet, client);
@@ -116,7 +129,7 @@ namespace SR.Tracker
 		{
 			log.Info ("Ping Packet - " + tcpClient.Client.RemoteEndPoint);
 
-			ClientNode node = nodeMgr.getNodeByEndpoint (tcpClient.Client.RemoteEndPoint);
+			NetworkNode node = nodeMgr.GetNodeByEndpoint (tcpClient.Client.RemoteEndPoint);
 			if (node == null) {
 				log.Error ("Unknown node " + tcpClient.Client.RemoteEndPoint);
 				return;
@@ -131,14 +144,15 @@ namespace SR.Tracker
 			IPEndPoint endPoint = (IPEndPoint)client.Client.RemoteEndPoint;
 			log.Info ("Join Packet - " + endPoint + " - " + packet.id);
 
-			ClientNode node = nodeMgr.getNodeById (packet.id);
+			NetworkNode node = nodeMgr.GetNodeById (packet.id);
 			if (node != null) {
 				log.Warn ("Node tried to join with existing ID");
+				nodeMgr.UpdateNodeParent (node);
 				return;
+			} else {
+				node = new NetworkNode (packet.id, client, (int)packet.port);
+				nodeMgr.AddNode (node);
 			}
-
-			node = new ClientNode (packet.id, client.Client.RemoteEndPoint, (int) packet.port);
-			nodeMgr.addNode (node);
 
 			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.JOIN_RESP);
 			resp.id = packet.id;
@@ -146,13 +160,13 @@ namespace SR.Tracker
 				resp.ip = ((IPEndPoint)node.Parent.EndPoint).Address.ToString ();
 				resp.port = node.Parent.ListenPort;
 			}
-			resp.Write(client.GetStream());
+			resp.Write (client.GetStream ());
 		}
 
 		private void HandleDisconnectedPacket (NetworkPacket packet, TcpClient client)
 		{
 			log.Info ("Disconnected Packet - ID " + packet.id);
-			ClientNode node = nodeMgr.getNodeById (packet.id);
+			NetworkNode node = nodeMgr.GetNodeById (packet.id);
 			if (node == null) {
 				log.Error ("Unknown node " + packet.id);
 				return;
@@ -174,7 +188,7 @@ namespace SR.Tracker
 
 			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.ELECTION_RESP);
 			resp.allowed = !election;
-			resp.Write(client.GetStream());
+			resp.Write (client.GetStream ());
 			election = true;
 		}
 
@@ -182,11 +196,6 @@ namespace SR.Tracker
 		{
 			log.Info ("Election End Packet - ID " + packet.id);
 			election = false;
-			// TODO
-		}
-
-		private void BroadcastPacket (NetworkPacket packet)
-		{
 			// TODO
 		}
 	}
