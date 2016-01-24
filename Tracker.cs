@@ -13,7 +13,7 @@ namespace SR.Tracker
 {
 	public class Tracker
 	{
-		private const int PORT = 51234;
+		private const int PORT = 6666;
 
 		static readonly ILog log = LogManager.GetLogger(typeof(Tracker));
 
@@ -24,8 +24,7 @@ namespace SR.Tracker
 		public Tracker ()
 		{
 			log.Info ("Starting tracker...");
-			IPAddress ipAddress = Dns.GetHostEntry ("localhost").AddressList [1];
-			server = new TcpListener (ipAddress, PORT);
+			server = new TcpListener (IPAddress.Any, PORT);
 			server.Start ();
 		}
 
