@@ -155,10 +155,12 @@ namespace SR.Tracker
 			}
 
 			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.JOIN_RESP);
-			resp.id = packet.id;
 			if (node.Parent != null) {
+				resp.id = node.Parent.Id;
 				resp.ip = ((IPEndPoint)node.Parent.EndPoint).Address.ToString ();
 				resp.port = node.Parent.ListenPort;
+			} else {
+				resp.id = packet.id;
 			}
 			resp.Write (client.GetStream ());
 		}
