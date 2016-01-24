@@ -22,7 +22,7 @@ namespace SR.Tracker
 				return Client.Client.RemoteEndPoint;
 			}
 		}
-		public List<NetworkNode> Children { get; private set; }
+		public List<NetworkNode> Children { get; private set; } = new List<NetworkNode>();
 		public TcpClient Client { get; private set; }
 
 		public NetworkNode (String id, TcpClient tcpClient, int listenPort)

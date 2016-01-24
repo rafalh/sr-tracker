@@ -83,7 +83,7 @@ namespace SR.Tracker
 
 			// Find nodes with 1-7 children
 			var bestParents = parentCandidates.Where ((NetworkNode currentNode) => {
-				return node.Children.Count > 0 && node.Children.Count < 8;
+				return currentNode.Children.Count > 0 && currentNode.Children.Count < 8;
 			});
 
 			if (bestParents.Count () > 0) {
