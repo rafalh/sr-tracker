@@ -34,14 +34,14 @@ namespace SR.Tracker
 			TcpClient tcpClient = (TcpClient) argument;
 			// Get a stream object for reading and writing
 			NetworkStream stream = tcpClient.GetStream ();
-			ClientNode node = nodeMgr.getNodeByEndpoint (tcpClient.Client.RemoteEndPoint);
+
 
 			while (true) {
 				NetworkPacket packet;
 				try {
 					packet = NetworkPacket.Read (stream);
 				} catch (Exception) {
-					OnNodeDisconnected (node);
+					OnNodeDisconnected (tcpClient.Client.RemoteEndPoint);
 					break;
 				}
 				HandlePacket (packet, tcpClient);
@@ -51,10 +51,16 @@ namespace SR.Tracker
 			tcpClient.Close ();
 		}
 
-		private void OnNodeDisconnected(ClientNode node)
+		private void OnNodeDisconnected(EndPoint endPoint)
 		{
-			log.Info ("Node " + node.Id + " disconnected.");
-			nodeMgr.RemoveNode (node);
+			ClientNode node = nodeMgr.getNodeByEndpoint (endPoint);
+
+			if (node != null) {
+				log.Info ("Node " + node.Id + " disconnected.");
+				nodeMgr.RemoveNode (node);
+			} else {
+				log.Info (endPoint + " disconnected before establishing connection.");
+			}
 		}
 
 		public void MainLoop ()
