@@ -44,8 +44,12 @@ namespace SR.Tracker
 		{
 			lock (mutex) {
 				log.Info ("Adding node " + node.Id);
-				node.Parent = FindParentForNode (null);
-				log.Info ("Parent for new node: " + node.Parent?.Id);
+				node.Parent = FindParentForNode (node);
+				if (node.Parent != null) {
+					log.Info ("Parent for new node: " + node.Parent.Id);
+				} else {
+					log.Info ("New node is a root node");
+				}
 				nodes.Add (node);
 				log.Info ("Number of nodes " + nodes.Count);
 			}
