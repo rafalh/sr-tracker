@@ -148,7 +148,6 @@ namespace SR.Tracker
 			if (node != null) {
 				log.Warn ("Node tried to join with existing ID");
 				nodeMgr.UpdateNodeParent (node);
-				return;
 			} else {
 				node = new NetworkNode (packet.id, client, (int)packet.port);
 				nodeMgr.AddNode (node);
