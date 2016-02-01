@@ -46,6 +46,7 @@ namespace SR.Tracker
 				log.Info ("Adding node " + node.Id);
 				node.Parent = FindParentForNode (node);
 				if (node.Parent != null) {
+					node.Parent.Children.Add (node);
 					log.Info ("Parent for new node: " + node.Parent.Id);
 				} else {
 					log.Info ("New node is a root node");
@@ -60,8 +61,23 @@ namespace SR.Tracker
 			lock (mutex) {
 				log.Info ("Removing node " + node.Id);
 				nodes.Remove (node);
-				foreach (NetworkNode child in node.Children)
-					child.Parent = null; // children should ask for new parent
+
+				if (node.Parent != null)
+					node.Parent.Children.Remove (node);
+
+				if (node.Children.Count == 0)
+					return;
+
+				// first child replaces node and the other children connect to it
+				NetworkNode replaceNode = node.Children [0];
+				replaceNode.Parent = node.Parent;
+				if (replaceNode.Parent != null)
+					replaceNode.Parent.Children.Add (replaceNode);
+
+				for (int i = 1; i < node.Children.Count; i++) {
+					node.Children [i].Parent = replaceNode;
+					replaceNode.Children.Add (node.Children [i]);
+				}
 			}
 		}
 

@@ -70,7 +70,7 @@ namespace SR.Tracker
 
 			if (node != null) {
 				log.Info ("Node " + node.Id + " disconnected.");
-				nodeMgr.RemoveNode (node);
+				DisconnectNode (node);
 			} else {
 				log.Info (endPoint + " disconnected before establishing connection.");
 			}
@@ -173,7 +173,7 @@ namespace SR.Tracker
 				return;
 			}
 
-			nodeMgr.RemoveNode (node);
+			DisconnectNode (node);
 		}
 
 		private void HandleConnectionsInfoPacket (NetworkPacket packet, TcpClient client)
@@ -198,6 +198,20 @@ namespace SR.Tracker
 			log.Info ("Election End Packet - ID " + packet.id);
 			election = false;
 			// TODO
+		}
+
+		private void DisconnectNode(NetworkNode node)
+		{
+			nodeMgr.RemoveNode (node);
+			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.JOIN_RESP);
+			foreach (NetworkNode child in node.Children) {
+				if (child.Parent != null) {
+					resp.id = child.Parent.Id;
+					resp.ip = ((IPEndPoint)child.Parent.EndPoint).Address.ToString ();
+					resp.port = child.Parent.ListenPort;
+					resp.Write (child.Client.GetStream ());
+				}
+			}
 		}
 	}
 }
