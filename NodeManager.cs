@@ -65,18 +65,10 @@ namespace SR.Tracker
 				if (node.Parent != null)
 					node.Parent.Children.Remove (node);
 
-				if (node.Children.Count == 0)
-					return;
-
-				// first child replaces node and the other children connect to it
-				NetworkNode replaceNode = node.Children [0];
-				replaceNode.Parent = node.Parent;
-				if (replaceNode.Parent != null)
-					replaceNode.Parent.Children.Add (replaceNode);
-
-				for (int i = 1; i < node.Children.Count; i++) {
-					node.Children [i].Parent = replaceNode;
-					replaceNode.Children.Add (node.Children [i]);
+				foreach (NetworkNode child in node.Children) {
+					child.Parent = FindParentForNode (child);
+					if (child.Parent != null)
+						child.Parent.AddChild (child);
 				}
 			}
 		}
