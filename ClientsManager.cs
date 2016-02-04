@@ -15,12 +15,15 @@ namespace SR.Tracker
 		private readonly object mutex = new object ();
 		private readonly List<ConnectedClient> clients = new List<ConnectedClient> ();
 		private readonly TreeManager treeMgr = new TreeManager ();
+		private DateTime lastElection = DateTime.Now;
+		private const int TimeElectionValueMs = 10000;
 
 		public void AddClient (TcpClient tcpClient)
 		{
 			ConnectedClient client = new ConnectedClient (tcpClient);
 			client.DisconnectedEvent += OnClientDisconnected;
 			client.JoinedEvent += OnClientJoined;
+			client.ElectionEvent += OnElectionReq;
 			lock (mutex) {
 				client.Start ();
 				clients.Add (client);
@@ -57,6 +60,21 @@ namespace SR.Tracker
 				treeMgr.RemoveNode (client.TreeNode);
 			}
 			clients.Remove (client);
+		}
+
+		private void OnElectionReq (Object sender, EventArgs eventArgs)
+		{
+			lock (mutex) {
+				if ((DateTime.Now - lastElection).TotalMilliseconds > TimeElectionValueMs) {
+					ConnectedClient max = clients [0];
+					foreach (ConnectedClient client in clients) {
+						if (String.Compare (max.TreeNode.Id, client.TreeNode.Id, true) > 0)
+							max = client;
+					}
+					max.SetElectionLeader ();
+					lastElection = DateTime.Now;
+				}
+			}
 		}
 
 		private void OnClientDisconnected (Object sender, EventArgs eventArgs)

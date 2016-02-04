@@ -54,6 +54,11 @@ namespace SR.Tracker
 		 */
 		public event EventHandler DisconnectedEvent;
 
+		/**
+		 * Event - election request
+		 */
+		public event EventHandler ElectionEvent;
+
 		private static readonly ILog log = LogManager.GetLogger (typeof(ConnectedClient));
 
 		private readonly object mutex = new object();
@@ -125,6 +130,12 @@ namespace SR.Tracker
 			} else {
 				return false;
 			}
+		}
+
+		public void SetElectionLeader ()
+		{
+			NetworkPacket packet = new NetworkPacket (NetworkPacket.Type.ElectionFinish);
+			SendPacket (packet);
 		}
 
 		private void RecvThreadProc ()
@@ -233,6 +244,8 @@ namespace SR.Tracker
 
 		private void HandleElectionReqPacket (NetworkPacket packet)
 		{
+			log.Info ("Election Req Packet");
+			ElectionEvent.Invoke (this, EventArgs.Empty);
 			/*log.Info ("Election Req Packet - ID " + packet.id);
 			// TODO
 
