@@ -141,6 +141,9 @@ namespace SR.Tracker
 				} catch (IOException e) {
 					OnSocketError (e);
 					break;
+				} catch(ArgumentException e) {
+					OnSocketError (e);
+					break;
 				}
 			}
 		}
