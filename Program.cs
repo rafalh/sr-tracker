@@ -9,7 +9,7 @@ namespace SR.Tracker
 {
 	class MainClass
 	{
-		static readonly ILog log = LogManager.GetLogger(typeof(Tracker));
+		private static readonly ILog log = LogManager.GetLogger(typeof(MainClass));
 
 		private static void configureLog4net()
 		{

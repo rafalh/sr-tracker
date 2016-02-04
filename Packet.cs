@@ -13,20 +13,23 @@ namespace SR.Packets
 	public class ConnectionInfo
 	{
 		[DataMember]
-		public String id;
+		public string id;
 
 		[DataMember]
-		public bool conn;
+		public bool isIncomming;
 
 		[DataMember]
-		public String ip;
+		public string ip;
+
+		[DataMember]
+		public int port;
 	}
 
 	[DataContract]
 	public class TokenClient
 	{
 		[DataMember]
-		public String id;
+		public string id;
 
 		[DataMember]
 		public int r;
@@ -48,7 +51,7 @@ namespace SR.Packets
 			REQ = 5, // zadanie dostepu do zasobu
 			REQ_RESP = 6, // odpowiedz na zadanie
 			TOKEN = 7, // przekazywanie tokenu
-			CONNECTIONS_INFO = 8,
+			//CONNECTIONS_INFO = 8,
 			BULLY = 9, // tyran
 			ELECTION_REQ = 10, // początek elekcji
 			ELECTION_RESP = 11,
@@ -66,19 +69,19 @@ namespace SR.Packets
 		public int type;
 
 		[DataMember(EmitDefaultValue = false)]
-		public String id;
+		public string id;
 
 		[DataMember(EmitDefaultValue = false)]
 		public int? port;
 
 		[DataMember(EmitDefaultValue = false)]
-		public String ip;
+		public string ip;
 
 		[DataMember(EmitDefaultValue = false)]
 		public int? r;
 
 		[DataMember(EmitDefaultValue = false)]
-		public String dst_id = null;
+		public string dst_id = null;
 
 		[DataMember(EmitDefaultValue = false)]
 		public int? idx;
@@ -108,9 +111,11 @@ namespace SR.Packets
 			memStream.Position = 0;
 			memStream.CopyTo(stream);
 
-			memStream.Position = 0;
-			StreamReader sr = new StreamReader(memStream);
-			log.Debug("Sent packet: " + sr.ReadToEnd());
+			if (log.IsDebugEnabled) {
+				memStream.Position = 0;
+				StreamReader sr = new StreamReader (memStream);
+				log.Debug ("Sent packet: " + sr.ReadToEnd ());
+			}
 		}
 
 		public static NetworkPacket Read(NetworkStream stream)
@@ -124,9 +129,11 @@ namespace SR.Packets
 			MemoryStream memStream = new MemoryStream(data);
 			NetworkPacket packet = (NetworkPacket) ser.ReadObject (memStream);
 
-			memStream.Position = 0;
-			StreamReader sr = new StreamReader(memStream);
-			log.Debug("Received packet: " + sr.ReadToEnd());
+			if (log.IsDebugEnabled) {
+				memStream.Position = 0;
+				StreamReader sr = new StreamReader (memStream);
+				log.Debug ("Received packet: " + sr.ReadToEnd ());
+			}
 
 			return packet;
 		}

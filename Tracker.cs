@@ -11,206 +11,64 @@ using System.Diagnostics;
 
 namespace SR.Tracker
 {
+	/**
+	 * Tracker main class.
+	 * Creates listening socket and accepts clients.
+	 */
 	public class Tracker
 	{
 		private const int PORT = 6666;
 
-		static readonly ILog log = LogManager.GetLogger (typeof(Tracker));
+		private static readonly ILog log = LogManager.GetLogger (typeof(Tracker));
 
-		private TcpListener server;
-		private NodeManager nodeMgr = new NodeManager ();
-		private bool election = false;
-		private Object packetHandlingMutex = new object ();
+		private TcpListener tcpListener;
+		private readonly ClientsManager clientsMgr = new ClientsManager ();
+		private readonly ManualResetEvent stopEvent = new ManualResetEvent (false);
+		private Thread acceptThread;
+		//private bool election = false;
 
 		public Tracker ()
 		{
+			// Create server socket
 			log.Info ("Starting tracker...");
-			server = new TcpListener (IPAddress.Any, PORT);
-			server.Start ();
+			tcpListener = new TcpListener (IPAddress.Any, PORT);
+			tcpListener.Start ();
 
-			ThreadPool.QueueUserWorkItem (state => {
-				TimeoutCheckerThreadProc ();
-			});
+			// start ping checker thread
+			acceptThread = new Thread(new ThreadStart(TimeoutCheckerThreadProc));
+			acceptThread.Name = "Tracker Accept";
+			acceptThread.Start ();
 		}
 
-		private void TimeoutCheckerThreadProc()
+		/**
+		 * Stop tracker threads.
+		 */
+		public void Stop ()
 		{
-			while (true) {
-				Thread.Sleep (NetworkNode.TimeOutValueMs);
-				// TODO: check
-			}
+			stopEvent.Set ();
+			acceptThread.Join ();
 		}
 
-		private void ThreadProc (Object argument)
-		{
-			TcpClient tcpClient = (TcpClient)argument;
-			// Get a stream object for reading and writing
-			NetworkStream stream = tcpClient.GetStream ();
-
-			while (true) {
-				NetworkPacket packet;
-				try {
-					packet = NetworkPacket.Read (stream);
-				} catch (Exception) {
-					OnNodeDisconnected (tcpClient.Client.RemoteEndPoint);
-					break;
-				}
-				lock (packetHandlingMutex) {
-					HandlePacket (packet, tcpClient);
-				}
-			}
-
-			// Shutdown and end connection
-			tcpClient.Close ();
-		}
-
-		private void OnNodeDisconnected (EndPoint endPoint)
-		{
-			NetworkNode node = nodeMgr.GetNodeByEndpoint (endPoint);
-
-			if (node != null) {
-				log.Info ("Node " + node.Id + " disconnected.");
-				DisconnectNode (node);
-			} else {
-				log.Info (endPoint + " disconnected before establishing connection.");
-			}
-		}
-
+		/**
+		 * Main tracker loop waiting for new clients.
+		 */
 		public void MainLoop ()
 		{
 			while (true) {
 				log.Info ("Waiting for a connection...");
 
 				// Perform a blocking call to accept requests.
-				TcpClient client = server.AcceptTcpClient ();
-				log.Info ("Connected: " + client.Client.RemoteEndPoint);
-
-				ThreadPool.QueueUserWorkItem (state => {
-					ThreadProc (client);
-				});
+				TcpClient tcpClient = tcpListener.AcceptTcpClient ();
+				log.Info ("Connected: " + tcpClient.Client.RemoteEndPoint);
+				clientsMgr.AddClient (tcpClient);
 			}
 		}
 
-		private void HandlePacket (NetworkPacket packet, TcpClient client)
+		private void TimeoutCheckerThreadProc ()
 		{
-			switch ((NetworkPacket.Type)packet.type) {
-
-			case NetworkPacket.Type.JOIN:
-				HandleJoinPacket (packet, client);
-				break;
-
-			case NetworkPacket.Type.PING:
-				HandlePingPacket (packet, client);
-				break;
-
-			case NetworkPacket.Type.DISCONNECTED:
-				HandleDisconnectedPacket (packet, client);
-				break;
-
-			case NetworkPacket.Type.CONNECTIONS_INFO:
-				HandleConnectionsInfoPacket (packet, client);
-				break;
-
-			case NetworkPacket.Type.ELECTION_REQ:
-				HandleElectionReqPacket (packet, client);
-				break;
-
-			case NetworkPacket.Type.ELECTION_END:
-				HandleElectionEndPacket (packet, client);
-				break;
-
-			default:
-				log.Warn ("Unknown packet " + packet.type);
-				break;
-			}
-		}
-
-		private void HandlePingPacket (NetworkPacket packet, TcpClient tcpClient)
-		{
-			log.Info ("Ping Packet - " + tcpClient.Client.RemoteEndPoint);
-
-			NetworkNode node = nodeMgr.GetNodeByEndpoint (tcpClient.Client.RemoteEndPoint);
-			if (node == null) {
-				log.Error ("Unknown node " + tcpClient.Client.RemoteEndPoint);
-				return;
-			}
-
-			node.UpdateLastPing ();
-		}
-
-		private void HandleJoinPacket (NetworkPacket packet, TcpClient client)
-		{
-			Debug.Assert (packet.id != null && packet.port != null);
-			IPEndPoint endPoint = (IPEndPoint)client.Client.RemoteEndPoint;
-			log.Info ("Join Packet - " + endPoint + " - " + packet.id);
-
-			NetworkNode node = nodeMgr.GetNodeById (packet.id);
-			if (node != null) {
-				log.Warn ("Node tried to join with existing ID");
-				nodeMgr.UpdateNodeParent (node);
-			} else {
-				node = new NetworkNode (packet.id, client, (int)packet.port);
-				nodeMgr.AddNode (node);
-			}
-
-			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.JOIN_RESP);
-			if (node.Parent != null) {
-				resp.id = node.Parent.Id;
-				resp.ip = ((IPEndPoint)node.Parent.EndPoint).Address.ToString ();
-				resp.port = node.Parent.ListenPort;
-			} else {
-				resp.id = packet.id;
-			}
-			resp.Write (client.GetStream ());
-		}
-
-		private void HandleDisconnectedPacket (NetworkPacket packet, TcpClient client)
-		{
-			log.Info ("Disconnected Packet - ID " + packet.id);
-			NetworkNode node = nodeMgr.GetNodeById (packet.id);
-			if (node == null) {
-				log.Error ("Unknown node " + packet.id);
-				return;
-			}
-
-			DisconnectNode (node);
-		}
-
-		private void HandleConnectionsInfoPacket (NetworkPacket packet, TcpClient client)
-		{
-			log.Info ("Connections Info Packet - ID " + packet.id);
-			// TODO
-		}
-
-		private void HandleElectionReqPacket (NetworkPacket packet, TcpClient client)
-		{
-			log.Info ("Election Req Packet - ID " + packet.id);
-			// TODO
-
-			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.ELECTION_RESP);
-			resp.allowed = !election;
-			resp.Write (client.GetStream ());
-			election = true;
-		}
-
-		private void HandleElectionEndPacket (NetworkPacket packet, TcpClient client)
-		{
-			log.Info ("Election End Packet - ID " + packet.id);
-			election = false;
-			// TODO
-		}
-
-		private void DisconnectNode(NetworkNode node)
-		{
-			nodeMgr.RemoveNode (node);
-			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.JOIN_RESP);
-			foreach (NetworkNode child in node.Children) {
-				if (child.Parent != null) {
-					resp.id = child.Parent.Id;
-					resp.ip = ((IPEndPoint)child.Parent.EndPoint).Address.ToString ();
-					resp.port = child.Parent.ListenPort;
-					resp.Write (child.Client.GetStream ());
-				}
+			// periodically check if any client timed out
+			while (!stopEvent.WaitOne (ConnectedClient.TimeOutValueMs)) {
+				clientsMgr.CheckForTimeOuts ();
 			}
 		}
 	}
