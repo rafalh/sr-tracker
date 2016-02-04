@@ -17,6 +17,7 @@ namespace SR.Tracker
 		private readonly TreeManager treeMgr = new TreeManager ();
 		private DateTime lastElection = DateTime.Now;
 		private const int TimeElectionValueMs = 10000;
+		private bool stoping = false;
 
 		public void AddClient (TcpClient tcpClient)
 		{
@@ -47,11 +48,14 @@ namespace SR.Tracker
 		public void StopAll()
 		{
 			lock (mutex) {
+				stoping = true;
 				foreach (ConnectedClient client in clients) {
 					client.Stop ();
 				}
 				clients.Clear ();
+				stoping = false;
 			}
+
 		}
 
 		private void RemoveClient (ConnectedClient client)
@@ -80,6 +84,9 @@ namespace SR.Tracker
 		private void OnClientDisconnected (Object sender, EventArgs eventArgs)
 		{
 			ConnectedClient client = (ConnectedClient) sender;
+			if (stoping) {
+				return;
+			}
 
 			lock (mutex) {
 				

@@ -166,16 +166,8 @@ namespace SR.Tracker
 				HandlePingPacket (packet);
 				break;
 
-			case NetworkPacket.Type.Disconnected:
-				HandleDisconnectedPacket (packet);
-				break;
-
 			case NetworkPacket.Type.ElectionReq:
 				HandleElectionReqPacket (packet);
-				break;
-
-			case NetworkPacket.Type.ElectionFinish:
-				HandleElectionEndPacket (packet);
 				break;
 
 			default:
@@ -230,36 +222,10 @@ namespace SR.Tracker
 			SendPacket (resp);
 		}
 
-		private void HandleDisconnectedPacket (NetworkPacket packet)
-		{
-			log.Info ("Disconnected Packet - ID " + packet.id);
-			if (packet.id == TreeNode.Id) {
-				// disconnect ourself
-				Disconnect ();
-			} else {
-				// disconnect packet with invalid ID
-				log.Warn("Invalid node ID in disconnected packet");
-			}
-		}
-
 		private void HandleElectionReqPacket (NetworkPacket packet)
 		{
 			log.Info ("Election Req Packet");
 			ElectionEvent.Invoke (this, EventArgs.Empty);
-			/*log.Info ("Election Req Packet - ID " + packet.id);
-			// TODO
-
-			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.ELECTION_RESP);
-			resp.allowed = !election;
-			resp.Write (client.GetStream ());
-			election = true;*/
-		}
-
-		private void HandleElectionEndPacket (NetworkPacket packet)
-		{
-			/*log.Info ("Election End Packet - ID " + packet.id);
-			election = false;*/
-			// TODO
 		}
 	}
 }
