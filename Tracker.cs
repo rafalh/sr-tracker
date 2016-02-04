@@ -24,7 +24,7 @@ namespace SR.Tracker
 		private TcpListener tcpListener;
 		private readonly ClientsManager clientsMgr = new ClientsManager ();
 		private readonly ManualResetEvent stopEvent = new ManualResetEvent (false);
-		private Thread acceptThread;
+		private Thread pingCheckerThread;
 		//private bool election = false;
 
 		public Tracker ()
@@ -35,9 +35,9 @@ namespace SR.Tracker
 			tcpListener.Start ();
 
 			// start ping checker thread
-			acceptThread = new Thread(new ThreadStart(TimeoutCheckerThreadProc));
-			acceptThread.Name = "Tracker Accept";
-			acceptThread.Start ();
+			pingCheckerThread = new Thread(TimeoutCheckerThreadProc);
+			pingCheckerThread.Name = "Tracker Accept";
+			pingCheckerThread.Start ();
 		}
 
 		/**
@@ -45,8 +45,17 @@ namespace SR.Tracker
 		 */
 		public void Stop ()
 		{
+			// Set stop event
 			stopEvent.Set ();
-			acceptThread.Join ();
+			// Close socket
+			try {
+				tcpListener.Stop ();
+			} catch (Exception e) {
+				log.Debug ("Exception when closing listener: " + e.Message);
+			}
+			clientsMgr.StopAll ();
+			// Wait for ping thread to stop
+			pingCheckerThread.Join ();
 		}
 
 		/**
@@ -54,12 +63,18 @@ namespace SR.Tracker
 		 */
 		public void MainLoop ()
 		{
-			while (true) {
+			while (stopEvent.WaitOne (0) == false) {
 				log.Info ("Waiting for a connection...");
 
 				// Perform a blocking call to accept requests.
-				TcpClient tcpClient = tcpListener.AcceptTcpClient ();
-				log.Info ("Connected: " + tcpClient.Client.RemoteEndPoint);
+				TcpClient tcpClient;
+				try {
+					tcpClient = tcpListener.AcceptTcpClient ();
+					log.Info ("Connected: " + tcpClient.Client.RemoteEndPoint);
+				} catch (Exception e) {
+					log.Debug ("Exception when waiting for connection: " + e.Message);
+					break;
+				}
 				clientsMgr.AddClient (tcpClient);
 			}
 		}

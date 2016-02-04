@@ -12,17 +12,14 @@ namespace SR.Tracker
 {
 	public class JoinedEventArgs : EventArgs
 	{
-		public JoinedEventArgs (string nodeId, IPEndPoint listenEndPoint, List<ConnectionInfo> connections) {
+		public JoinedEventArgs (string nodeId, IPEndPoint listenEndPoint) {
 			this.NodeId = nodeId;
 			this.ListenEndPoint = listenEndPoint;
-			this.Connections = connections;
 		}
 
 		public string NodeId { get; private set; }
 
 		public IPEndPoint ListenEndPoint { get; private set; }
-
-		public List<ConnectionInfo> Connections { get; private set; }
 	}
 
 	public delegate void JoinedEventHandler (object sender, JoinedEventArgs e);
@@ -42,10 +39,9 @@ namespace SR.Tracker
 		/**
 		 * Client IP address and port.
 		 */
-		public EndPoint EndPoint {
-			get {
-				return tcpClient.Client.RemoteEndPoint;
-			}
+		public IPEndPoint EndPoint {
+			get;
+			private set;
 		}
 
 		/**
@@ -60,17 +56,18 @@ namespace SR.Tracker
 
 		private static readonly ILog log = LogManager.GetLogger (typeof(ConnectedClient));
 
-		private TcpClient tcpClient;
 		private readonly object mutex = new object();
+		private TcpClient tcpClient;
 		private Thread recvThread;
 		private DateTime lastPing;
-		private bool disconnecting = false;
 
 		public ConnectedClient (TcpClient tcpClient)
 		{
 			this.tcpClient = tcpClient;
+			EndPoint = (IPEndPoint) tcpClient.Client.RemoteEndPoint;
 			recvThread = new Thread (new ThreadStart (RecvThreadProc));
-			recvThread.Name = "Tracker Client Receive";
+			//recvThread.Name = "Tracker Client Receive";
+			lastPing = DateTime.Now;
 		}
 
 		/**
@@ -86,10 +83,23 @@ namespace SR.Tracker
 		 */
 		public void Stop ()
 		{
-			disconnecting = true;
-			tcpClient.Close ();
+			Disconnect ();
 			if (!Thread.CurrentThread.Equals(recvThread)) {
 				recvThread.Join ();
+			}
+		}
+		
+		private void Disconnect()
+		{
+			lock (mutex) {
+				if (tcpClient != null) {
+					try {
+						tcpClient.Close ();
+					} catch (Exception e) {
+						log.Debug ("Exception when closing connection to peer: " + e.Message);
+					}
+					tcpClient = null;
+				}
 			}
 		}
 
@@ -98,7 +108,9 @@ namespace SR.Tracker
 		 */
 		public bool IsTimedOut ()
 		{
-			return (DateTime.UtcNow - lastPing).TotalMilliseconds > TimeOutValueMs;
+			lock (mutex) {
+				return (DateTime.Now - lastPing).TotalMilliseconds > TimeOutValueMs;
+			}
 		}
 
 		/**
@@ -115,60 +127,43 @@ namespace SR.Tracker
 			}
 		}
 
-		private void OnSocketError (Exception e)
-		{
-			if (!disconnecting) {
-				// this is unexpected error
-				log.Warn ("Socket error: " + e.Message);
-				tcpClient.Close ();
-				DisconnectedEvent?.Invoke (this, EventArgs.Empty);
-			}
-		}
-
 		private void RecvThreadProc ()
 		{
-			NetworkStream stream = tcpClient.GetStream ();
-
-			while (true) {
+			while (tcpClient != null) {
+				NetworkPacket packet;
 				try {
-					NetworkPacket packet = NetworkPacket.Read (stream);
-					lock (mutex) {
-						HandlePacket (packet);
-					}
-				} catch (SocketException e) {
-					OnSocketError (e);
-					break;
-				} catch (IOException e) {
-					OnSocketError (e);
-					break;
-				} catch(ArgumentException e) {
-					OnSocketError (e);
+					packet = NetworkPacket.Read (tcpClient.GetStream ());
+				} catch (Exception e) {
+					log.Info ("Disconnected from peer: " + e.Message);
 					break;
 				}
+				HandlePacket (packet);
 			}
+
+			DisconnectedEvent?.Invoke (this, EventArgs.Empty);
 		}
 
 		private void HandlePacket (NetworkPacket packet)
 		{
 			switch ((NetworkPacket.Type)packet.type) {
 
-			case NetworkPacket.Type.JOIN:
+			case NetworkPacket.Type.JoinReq:
 				HandleJoinReqPacket (packet);
 				break;
 
-			case NetworkPacket.Type.PING:
+			case NetworkPacket.Type.Ping:
 				HandlePingPacket (packet);
 				break;
 
-			case NetworkPacket.Type.DISCONNECTED:
+			case NetworkPacket.Type.Disconnected:
 				HandleDisconnectedPacket (packet);
 				break;
 
-			case NetworkPacket.Type.ELECTION_REQ:
+			case NetworkPacket.Type.ElectionReq:
 				HandleElectionReqPacket (packet);
 				break;
 
-			case NetworkPacket.Type.ELECTION_END:
+			case NetworkPacket.Type.ElectionFinish:
 				HandleElectionEndPacket (packet);
 				break;
 
@@ -180,21 +175,40 @@ namespace SR.Tracker
 
 		private void HandlePingPacket (NetworkPacket packet)
 		{
-			log.Info ("Ping Packet - " + tcpClient.Client.RemoteEndPoint);
-			lastPing = DateTime.UtcNow;
+			log.Info ("Ping Packet - " + EndPoint);
+			lock (mutex) {
+				lastPing = DateTime.Now;
+			}
+		}
+
+		private bool SendPacket(NetworkPacket packet)
+		{
+			lock (mutex) {
+				if (tcpClient == null) {
+					return false;
+				}
+
+				try {
+					packet.Write (tcpClient.GetStream ());
+				} catch (Exception e) {
+					log.Debug ("Exception when writing packer: " + e.Message);
+					return false;
+				}
+			}
+			return true;
 		}
 
 		private void HandleJoinReqPacket (NetworkPacket packet)
 		{
 			Debug.Assert (packet.id != null && packet.port != null);
-			log.Info ("Join Packet - " + tcpClient.Client.RemoteEndPoint + " - " + packet.id);
-			IPEndPoint endPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
+			log.Info ("Join Packet - " + EndPoint + " " + packet.id);
+			IPEndPoint endPoint = (IPEndPoint)EndPoint;
 			IPEndPoint listenEndPoint = new IPEndPoint (endPoint.Address, (int)packet.port);
 
-			JoinedEvent?.Invoke (this, new JoinedEventArgs(packet.id, listenEndPoint, packet.connections));
+			JoinedEvent?.Invoke (this, new JoinedEventArgs(packet.id, listenEndPoint));
 
 			// Send response now (Note: JoinedEvent handler could changed our TreeNode).
-			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.JOIN_RESP);
+			NetworkPacket resp = new NetworkPacket (NetworkPacket.Type.JoinResp);
 			if (TreeNode.Parent != null) {
 				resp.id = TreeNode.Parent.Id;
 				resp.ip = TreeNode.Parent.ListenEndPoint.Address.ToString ();
@@ -202,7 +216,7 @@ namespace SR.Tracker
 			} else {
 				resp.id = packet.id;
 			}
-			resp.Write (tcpClient.GetStream ());
+			SendPacket (resp);
 		}
 
 		private void HandleDisconnectedPacket (NetworkPacket packet)
@@ -210,7 +224,7 @@ namespace SR.Tracker
 			log.Info ("Disconnected Packet - ID " + packet.id);
 			if (packet.id == TreeNode.Id) {
 				// disconnect ourself
-				tcpClient.Close ();
+				Disconnect ();
 			} else {
 				// disconnect packet with invalid ID
 				log.Warn("Invalid node ID in disconnected packet");

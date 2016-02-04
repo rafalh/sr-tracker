@@ -41,6 +41,16 @@ namespace SR.Tracker
 			}
 		}
 
+		public void StopAll()
+		{
+			lock (mutex) {
+				foreach (ConnectedClient client in clients) {
+					client.Stop ();
+				}
+				clients.Clear ();
+			}
+		}
+
 		private void RemoveClient (ConnectedClient client)
 		{
 			if (client.TreeNode != null) {
@@ -68,7 +78,7 @@ namespace SR.Tracker
 		private void OnClientJoined (Object sender, JoinedEventArgs e)
 		{
 			ConnectedClient client = (ConnectedClient) sender;
-			TreeNode node = treeMgr.AddOrUpdateNode (e.NodeId, e.ListenEndPoint, e.Connections);
+			TreeNode node = treeMgr.AddOrUpdateNode (e.NodeId, e.ListenEndPoint);
 			client.TreeNode = node;
 
 			if (node.Parent != null) {

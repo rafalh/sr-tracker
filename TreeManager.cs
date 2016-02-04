@@ -31,16 +31,16 @@ namespace SR.Tracker
 		/**
 		 * Updated node information. If node doesn't exists add it to internal list.
 		 */
-		public TreeNode AddOrUpdateNode (string id, IPEndPoint endPoint, List<ConnectionInfo> connections)
+		public TreeNode AddOrUpdateNode (string id, IPEndPoint endPoint)
 		{
 			lock (mutex) {
 				TreeNode node = GetOrCreateNode (id);
 				node.ListenEndPoint = endPoint;
-				node.Children.Clear ();
-				UpdateNodeFromConnections (node, connections);
-				if (connections.Count == 0) {
+				//node.Children.Clear ();
+				//UpdateNodeFromConnections (node, connections);
+				//if (connections.Count == 0) {
 					node.Parent = FindParentForNode (node);
-				}
+				//}
 				node.Joined = true;
 				return node;
 			}
@@ -73,17 +73,21 @@ namespace SR.Tracker
 			return node;
 		}
 
-		private void UpdateNodeFromConnections(TreeNode node, List<ConnectionInfo> connections)
+		/*private void UpdateNodeFromConnections(TreeNode node, List<ConnectionInfo> connections)
 		{
 			foreach (ConnectionInfo info in connections) {
 				if (info.isIncomming) {
 					TreeNode child = GetOrCreateNode(info.id);
+					child.Parent = node;
 					node.Children.Add (child);
 				} else {
 					node.Parent = GetOrCreateNode(info.id);
+					if (node.Parent.Children.IndexOf (node) == -1) {
+						node.Parent.Children.Add (node);
+					}
 				}
 			}
-		}
+		}*/
 
 		private TreeNode FindParentForNode (TreeNode node)
 		{

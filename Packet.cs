@@ -17,12 +17,6 @@ namespace SR.Packets
 
 		[DataMember]
 		public bool isIncomming;
-
-		[DataMember]
-		public string ip;
-
-		[DataMember]
-		public int port;
 	}
 
 	[DataContract]
@@ -43,19 +37,16 @@ namespace SR.Packets
 	{
 		public enum Type
 		{
-			PING = 0,
-			JOIN = 1,
-			JOIN_RESP = 2,
-			PEER_HELLO = 3,
-			DISCONNECTED = 4,
-			REQ = 5, // zadanie dostepu do zasobu
-			REQ_RESP = 6, // odpowiedz na zadanie
-			TOKEN = 7, // przekazywanie tokenu
-			//CONNECTIONS_INFO = 8,
-			BULLY = 9, // tyran
-			ELECTION_REQ = 10, // początek elekcji
-			ELECTION_RESP = 11,
-			ELECTION_END = 12,
+			Ping = 0,
+			JoinReq = 1,
+			JoinResp = 2,
+			PeerHello = 3,
+			Disconnected = 4,
+			TokenReq = 5, // zadanie dostepu do zasobu
+			TokenBusy = 6, // odpowiedz na zadanie
+			Token = 7, // przekazywanie tokenu
+			ElectionReq = 10, // początek elekcji
+			ElectionFinish = 12,
 		};
 
 		static readonly ILog log = LogManager.GetLogger(typeof(NetworkPacket));
@@ -88,15 +79,6 @@ namespace SR.Packets
 
 		[DataMember(EmitDefaultValue = false)]
 		public List<TokenClient> table;
-
-		[DataMember(EmitDefaultValue = false)]
-		public List<ConnectionInfo> connections;
-
-		[DataMember(EmitDefaultValue = false)]
-		public int? elmode;
-
-		[DataMember(EmitDefaultValue = false)]
-		public bool? allowed;
 
 		public void Write(NetworkStream stream)
 		{
