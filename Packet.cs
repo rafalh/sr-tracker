@@ -72,12 +72,6 @@ namespace SR.Packets
 		public int? r;
 
 		[DataMember(EmitDefaultValue = false)]
-		public string dst_id = null;
-
-		[DataMember(EmitDefaultValue = false)]
-		public int? idx;
-
-		[DataMember(EmitDefaultValue = false)]
 		public List<TokenClient> table;
 
 		public void Write(NetworkStream stream)
