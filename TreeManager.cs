@@ -36,11 +36,10 @@ namespace SR.Tracker
 			lock (mutex) {
 				TreeNode node = GetOrCreateNode (id);
 				node.ListenEndPoint = endPoint;
-				//node.Children.Clear ();
-				//UpdateNodeFromConnections (node, connections);
-				//if (connections.Count == 0) {
-					node.Parent = FindParentForNode (node);
-				//}
+				node.Parent = FindParentForNode (node);
+				if (node.Parent != null && node.Parent.Children.IndexOf(node) == -1) {
+					node.Parent.Children.Add (node);
+				}
 				node.Joined = true;
 				return node;
 			}
@@ -58,6 +57,7 @@ namespace SR.Tracker
 					child.Parent = null; // children should ask for new parent
 					child.Joined = false;
 				}
+				node.Children.Clear ();
 			}
 		}
 
@@ -72,22 +72,6 @@ namespace SR.Tracker
 			}
 			return node;
 		}
-
-		/*private void UpdateNodeFromConnections(TreeNode node, List<ConnectionInfo> connections)
-		{
-			foreach (ConnectionInfo info in connections) {
-				if (info.isIncomming) {
-					TreeNode child = GetOrCreateNode(info.id);
-					child.Parent = node;
-					node.Children.Add (child);
-				} else {
-					node.Parent = GetOrCreateNode(info.id);
-					if (node.Parent.Children.IndexOf (node) == -1) {
-						node.Parent.Children.Add (node);
-					}
-				}
-			}
-		}*/
 
 		private TreeNode FindParentForNode (TreeNode node)
 		{
